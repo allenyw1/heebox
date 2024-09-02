@@ -3,8 +3,7 @@
 #define LEVELS 40
 #define ADC_PIN 27
 #define BUTTON_PIN 20
-
-#define DEBOUNCE_TIME 100
+#define DEBOUNCE_TIME 50
 
 // USER CONFIGURABLE SETTINGS
 #define ACTUATION_POINT 2 // Distance from top for actuation (in mm)
@@ -20,10 +19,10 @@ int local_max_level = 0; // Used for rapid trigger
 int actuated = 0; // 1 means actuated, 0 means not actuated
 
 int calibration_toggle = 0; // 1 for calibration mode
-int calibration_time; // Used for checking button debounce
+int calibration_time = 0; // Used for checking button debounce
 int read_max;
 int read_min;
-int ADC_RANGE = 1024;
+int adc_range = 1023;
 
 
 void setup() {
@@ -36,7 +35,7 @@ void setup() {
 
 void loop() {
   current_read = analogRead(ADC_PIN);
-  current_level = current_read * LEVELS / ADC_RANGE; // Value read by ADC
+  current_level = (current_read - read_min) * LEVELS / adc_range;
 
   if (calibration_toggle == 0) {
     // Device mode
@@ -62,17 +61,18 @@ void loop() {
 
 // ISR when button is pressed
 void calibration_isr() {
-  if (calibration_toggle == 0) {
-    calibration_toggle = 1;
+  if (millis() + DEBOUNCE_TIME > calibration_time) {
+    calibration_time = millis(); // Debounce
 
-    // Reset max and min readings
-    read_max = 0;
-    read_min = current_read;
-  } else {
-    calibration_toggle = 0;
-
-    // Calculate and set new range
-    ADC_RANGE = read_max - read_min;
+    if (calibration_toggle == 0 && digitalRead(BUTTON_PIN) == LOW) {
+      calibration_toggle = 1;
+      // Reset max and min readings
+      read_max = 0;
+      read_min = current_read;
+    } else if (calibration_toggle == 1 && digitalRead(BUTTON_PIN) == LOW){
+      calibration_toggle = 0;
+      adc_range = read_max - read_min; // Calculate and set new range
+    }
   }
 }
 
