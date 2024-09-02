@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "author": "Anonymous maker",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-pi-pico", "id": "pico", "top": -60.75, "left": -111.6, "attrs": {} },
+    {
+      "type": "wokwi-slide-potentiometer",
+      "id": "pot1",
+      "top": -33.4,
+      "left": 27.8,
+      "attrs": { "travelLength": "30" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": 54.2,
+      "left": 182.4,
+      "attrs": { "color": "green", "bounce": "0", "key": "f" }
+    }
+  ],
+  "connections": [
+    [ "pico:GP0", "$serialMonitor:RX", "", [] ],
+    [ "pico:GP1", "$serialMonitor:TX", "", [] ],
+    [ "pot1:GND", "pico:GND.8", "black", [ "v0" ] ],
+    [ "pot1:VCC", "pico:3V3", "red", [ "h0" ] ],
+    [ "pot1:SIG", "pico:GP27", "green", [ "h0" ] ],
+    [ "pico:GND.8", "btn1:1.r", "black", [ "h0" ] ],
+    [ "btn1:2.l", "pico:GP20", "green", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}
