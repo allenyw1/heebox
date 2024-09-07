@@ -2,12 +2,12 @@
 // 0.1mm highest sensitivty = 40 max sensitivity levels.
 #define LEVELS 40
 #define ADC_PIN 27
-#define BUTTON_PIN 20
-#define DEBOUNCE_TIME 50
+#define BUTTON_PIN 21
+#define DEBOUNCE_TIME 100
 
 // USER CONFIGURABLE SETTINGS
 #define ACTUATION_POINT 2 // Distance from top for actuation (in mm)
-#define RAPID_TRIGGER false // Enable/disable rapid trigger
+#define RAPID_TRIGGER true // Enable/disable rapid trigger
 #define RT_RELEASE 1 // Minimum release distance to reset rapid trigger (in mm)
 
 
@@ -20,23 +20,43 @@ int actuated = 0; // 1 means actuated, 0 means not actuated
 
 int calibration_toggle = 0; // 1 for calibration mode
 int calibration_time = 0; // Used for checking button debounce
+int calibration_trigger = 0;
 int read_max;
 int read_min;
 int adc_range = 1023;
 
 
 void setup() {
-  Serial1.begin(115200);
+  Serial.begin(115200);
   actuation_level = 10 * ACTUATION_POINT;
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), calibration_isr, FALLING);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
 void loop() {
   current_read = analogRead(ADC_PIN);
   current_level = (current_read - read_min) * LEVELS / adc_range;
 
+  // Handle calibration mode toggle
+  if (calibration_trigger == 1) {
+    if (millis() + DEBOUNCE_TIME > calibration_time) {
+      calibration_time = millis(); // Debounce
+
+      if (calibration_toggle == 0) {
+        calibration_toggle = 1;
+        // Reset max and min readings
+        read_max = 0;
+        read_min = current_read;
+      } else if (calibration_toggle == 1){
+        calibration_toggle = 0;
+        adc_range = read_max - read_min; // Calculate and set new range
+      }
+    }
+    calibration_trigger = 0;
+  }
+ 
+ 
   if (calibration_toggle == 0) {
     // Device mode
     if (RAPID_TRIGGER) {
@@ -45,15 +65,17 @@ void loop() {
       false_rapid_trigger();
     }
 
-    Serial1.print(actuated);
-    Serial1.print("    ");
-    Serial1.println(current_level);
+    Serial.print("DEVICE:    ");
+    Serial.print(actuated);
+    Serial.print("    ");
+    Serial.println(current_level);
   } else {
     // Calibration mode
     calibrate();
-    Serial1.print(read_min);
-    Serial1.print("    ");
-    Serial1.println(read_max);
+    Serial.print("CALIBR:    ");
+    Serial.print(read_min);
+    Serial.print("    ");
+    Serial.println(read_max);
   }
 
   delay(1); // this speeds up the simulation
@@ -61,19 +83,7 @@ void loop() {
 
 // ISR when button is pressed
 void calibration_isr() {
-  if (millis() + DEBOUNCE_TIME > calibration_time) {
-    calibration_time = millis(); // Debounce
-
-    if (calibration_toggle == 0 && digitalRead(BUTTON_PIN) == LOW) {
-      calibration_toggle = 1;
-      // Reset max and min readings
-      read_max = 0;
-      read_min = current_read;
-    } else if (calibration_toggle == 1 && digitalRead(BUTTON_PIN) == LOW){
-      calibration_toggle = 0;
-      adc_range = read_max - read_min; // Calculate and set new range
-    }
-  }
+  calibration_trigger = 1;
 }
 
 // Find maximum and minimum sensor readings
