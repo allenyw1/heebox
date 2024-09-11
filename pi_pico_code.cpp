@@ -2,7 +2,8 @@
 // 0.1mm highest sensitivty = 40 max sensitivity levels.
 #define LEVELS 40
 #define ADC_PIN 27
-#define BUTTON_PIN 21
+#define CALIBRATION_PIN 20
+#define RT_PIN 16
 #define DEBOUNCE_TIME 100
 
 // USER CONFIGURABLE SETTINGS
@@ -13,13 +14,16 @@
 int actuation_level; // Level conversion of actuation distance (mm to levels)
 int current_read = 0; // Raw input reading from HE sensor
 int current_level = 0; // Current switch depression level
-bool rapid_trigger_enable = false;
 int local_max_level = 0; // Used for rapid trigger
 int actuated = 0; // 1 means actuated, 0 means not actuated
 
+bool rapid_trigger_enable = false;
+bool rt_toggle_flag = false;
+int rt_toggle_time = 0;
+
 bool calibration_toggle = false;
+bool calibration_flag = false;
 int calibration_time = 0; // Used for checking button debounce
-bool calibration_trigger = false;
 int read_max;
 int read_min;
 int adc_range = 1023;
@@ -29,16 +33,29 @@ void setup() {
   Serial1.begin(115200);
   actuation_level = 10 * ACTUATION_POINT;
   
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), calibration_isr, FALLING);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(RT_PIN), rt_toggle_isr, FALLING);
+  pinMode(RT_PIN, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(CALIBRATION_PIN), calibration_isr, FALLING);
+  pinMode(CALIBRATION_PIN, INPUT_PULLUP);
 }
 
 void loop() {
   current_read = analogRead(ADC_PIN);
   current_level = (current_read - read_min) * LEVELS / adc_range;
 
+  // Handle rapid trigger toggle
+  if (rt_toggle_flag) {
+    if (millis() + DEBOUNCE_TIME > rt_toggle_time) {
+      rt_toggle_time = millis(); // Debounce
+
+      rapid_trigger_enable = !rapid_trigger_enable;
+    }
+    rt_toggle_flag = false;
+  }
+  
   // Handle calibration mode toggle
-  if (calibration_trigger) {
+  if (calibration_flag) {
     if (millis() + DEBOUNCE_TIME > calibration_time) {
       calibration_time = millis(); // Debounce
 
@@ -52,7 +69,7 @@ void loop() {
         adc_range = read_max - read_min; // Calculate and set new range
       }
     }
-    calibration_trigger = false;
+    calibration_flag = false;
   }
  
   // Main process
@@ -80,9 +97,14 @@ void loop() {
   delay(1); // this speeds up the simulation
 }
 
-// ISR when button is pressed
+// ISR when rapid trigger toggle button is pressed
+void rt_toggle_isr() {
+  rt_toggle_flag = true;
+}
+
+// ISR when calibration mode toggle button is pressed
 void calibration_isr() {
-  calibration_trigger = true;
+  calibration_flag = true;
 }
 
 // Find maximum and minimum sensor readings
