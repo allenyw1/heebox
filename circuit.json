@@ -7,7 +7,7 @@
     {
       "type": "wokwi-slide-potentiometer",
       "id": "pot1",
-      "top": -33.4,
+      "top": -43,
       "left": 27.8,
       "attrs": { "travelLength": "30" }
     },
@@ -16,7 +16,14 @@
       "id": "btn1",
       "top": 54.2,
       "left": 182.4,
-      "attrs": { "color": "green", "bounce": "0", "key": "f" }
+      "attrs": { "color": "green", "bounce": "1", "key": "f" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn2",
+      "top": 102.2,
+      "left": 182.4,
+      "attrs": { "color": "red" }
     }
   ],
   "connections": [
@@ -26,7 +33,9 @@
     [ "pot1:VCC", "pico:3V3", "red", [ "h0" ] ],
     [ "pot1:SIG", "pico:GP27", "green", [ "h0" ] ],
     [ "pico:GND.8", "btn1:1.r", "black", [ "h0" ] ],
-    [ "btn1:2.l", "pico:GP20", "green", [ "h0" ] ]
+    [ "btn1:2.l", "pico:GP20", "green", [ "h0" ] ],
+    [ "pico:GND.8", "btn2:1.r", "black", [ "h308.4", "v28.8" ] ],
+    [ "btn2:2.l", "pico:GP16", "green", [ "h0" ] ]
   ],
   "dependencies": {}
 }
