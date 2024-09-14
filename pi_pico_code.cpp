@@ -47,9 +47,11 @@ void loop() {
   // Handle rapid trigger toggle
   if (rt_toggle_flag) {
     if (millis() + DEBOUNCE_TIME > rt_toggle_time) {
-      rt_toggle_time = millis(); // Debounce
-
-      rapid_trigger_enable = !rapid_trigger_enable;
+      if(digitalRead(RT_PIN) == LOW) {
+        rt_toggle_time = millis(); // Debounce
+  
+        rapid_trigger_enable = !rapid_trigger_enable;
+      }
     }
     rt_toggle_flag = false;
   }
@@ -57,16 +59,18 @@ void loop() {
   // Handle calibration mode toggle
   if (calibration_flag) {
     if (millis() + DEBOUNCE_TIME > calibration_time) {
-      calibration_time = millis(); // Debounce
-
-      if (!calibration_toggle) {
-        calibration_toggle = true;
-        // Reset max and min readings
-        read_max = 0;
-        read_min = current_read;
-      } else if (calibration_toggle){
-        calibration_toggle = false;
-        adc_range = read_max - read_min; // Calculate and set new range
+      if(digitalRead(CALIBRATION_PIN) == LOW) {
+        calibration_time = millis(); // Debounce
+  
+        if (!calibration_toggle) {
+          calibration_toggle = true;
+          // Reset max and min readings
+          read_max = 0;
+          read_min = current_read;
+        } else if (calibration_toggle){
+          calibration_toggle = false;
+          adc_range = read_max - read_min; // Calculate and set new range
+        }
       }
     }
     calibration_flag = false;
