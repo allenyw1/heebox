@@ -10,28 +10,39 @@
 #define ACTUATION_POINT 2 // Distance from top for actuation (in mm)
 #define RT_RELEASE 1 // Minimum release distance to reset rapid trigger (in mm)
 
-// GLOBAL VARIABLES
-int actuation_level; // Level conversion of actuation distance (mm to levels)
-int current_read = 0; // Raw input reading from HE sensor
-int current_level = 0; // Current switch depression level
-int local_max_level = 0; // Used for rapid trigger
-int actuated = 0; // 1 means actuated, 0 means not actuated
+struct actuation {
+  int level; // Level conversion of actuation distance (mm to levels)
+  int current_read = 0; // Raw input reading from HE sensor
+  int current_level = 0; // Current switch depression level
+  int local_max_level = 0; // Used for rapid trigger
+  int actuated = 0; // 1 means actuated, 0 means not actuated
 
-bool rapid_trigger_enable = false;
-bool rt_toggle_flag = false;
-int rt_toggle_time = 0;
+  int samples[3] = {0, 0, 0};
+  int average_read = 0;
+};
 
-bool calibration_toggle = false;
-bool calibration_flag = false;
-int calibration_time = 0; // Used for checking button debounce
-int read_max;
-int read_min;
-int adc_range = 1023;
+struct rt {
+  bool enable = false;
+  bool interrupt_flag = false;
+  int interrupt_time = 0;
+};
 
+struct calibration {
+  bool enable = false;
+  bool interrupt_flag = false;
+  int interrupt_time = 0; // Used for checking button debounce
+  int read_max;
+  int read_min;
+  int adc_range = 1023;
+};
+
+actuation actuation;
+rt rt;
+calibration calibration;
 
 void setup() {
-  Serial1.begin(115200);
-  actuation_level = 10 * ACTUATION_POINT;
+  Serial.begin(115200);
+  actuation.level = 10 * ACTUATION_POINT;
   
   attachInterrupt(digitalPinToInterrupt(RT_PIN), rt_toggle_isr, FALLING);
   pinMode(RT_PIN, INPUT_PULLUP);
@@ -41,97 +52,115 @@ void setup() {
 }
 
 void loop() {
-  current_read = analogRead(ADC_PIN);
-  current_level = (current_read - read_min) * LEVELS / adc_range;
+  actuation.current_read = analogRead(ADC_PIN);
+  actuation.average_read = average_samples();
+  actuation.current_level = (actuation.average_read - calibration.read_min) * LEVELS / calibration.adc_range;
 
   // Handle rapid trigger toggle
-  if (rt_toggle_flag) {
-    if (millis() + DEBOUNCE_TIME > rt_toggle_time) {
+  if (rt.interrupt_flag) {
+    if (millis() + DEBOUNCE_TIME > rt.interrupt_time) {
       if(digitalRead(RT_PIN) == LOW) {
-        rt_toggle_time = millis(); // Debounce
+        rt.interrupt_time = millis(); // Debounce
   
-        rapid_trigger_enable = !rapid_trigger_enable;
+        rt.enable = !rt.enable;
       }
     }
-    rt_toggle_flag = false;
+    rt.interrupt_flag = false;
   }
   
   // Handle calibration mode toggle
-  if (calibration_flag) {
-    if (millis() + DEBOUNCE_TIME > calibration_time) {
+  if (calibration.interrupt_flag) {
+    if (millis() + DEBOUNCE_TIME > calibration.interrupt_time) {
       if(digitalRead(CALIBRATION_PIN) == LOW) {
-        calibration_time = millis(); // Debounce
+        calibration.interrupt_time = millis(); // Debounce
   
-        if (!calibration_toggle) {
-          calibration_toggle = true;
+        if (!calibration.enable) {
+          calibration.enable = true;
           // Reset max and min readings
-          read_max = 0;
-          read_min = current_read;
-        } else if (calibration_toggle){
-          calibration_toggle = false;
-          adc_range = read_max - read_min; // Calculate and set new range
+          calibration.read_max = 0;
+          calibration.read_min = actuation.current_read;
+        } else if (calibration.enable){
+          calibration.enable = false;
+          calibration.adc_range = calibration.read_max - calibration.read_min; // Calculate and set new range
         }
       }
     }
-    calibration_flag = false;
+    calibration.interrupt_flag = false;
   }
  
   // Main process
-  if (!calibration_toggle) {
+  if (!calibration.enable) {
     // Device mode
-    if (rapid_trigger_enable) {
+    if (rt.enable) {
       true_rapid_trigger();
     } else {
       false_rapid_trigger();
     }
 
-    Serial1.print("DEVICE:    ");
-    Serial1.print(actuated);
-    Serial1.print("    ");
-    Serial1.println(current_level);
+    Serial.print("DEVICE:    ");
+    Serial.print(actuation.actuated);
+    Serial.print("    ");
+    Serial.println(actuation.current_level);
   } else {
     // Calibration mode
     calibrate();
-    Serial1.print("CALIBR:    ");
-    Serial1.print(read_min);
-    Serial1.print("    ");
-    Serial1.println(read_max);
+    Serial.print("CALIBR:    ");
+    Serial.print(calibration.read_min);
+    Serial.print("    ");
+    Serial.println(calibration.read_max);
   }
 
   delay(1); // this speeds up the simulation
 }
 
+// Average the last three ADC readings
+int average_samples() {
+  int sum;
+
+  // Update samples array with most recent reading
+  actuation.samples[0] = actuation.samples[1];
+  actuation.samples[1] = actuation.samples[2];
+  actuation.samples[2] = actuation.current_read;
+
+  // Compute average
+  for (int i = 0; i < 3; i++) {
+    sum += actuation.samples[i];
+  }
+
+  return sum / 3;
+}
+
 // ISR when rapid trigger toggle button is pressed
 void rt_toggle_isr() {
-  rt_toggle_flag = true;
+  rt.interrupt_flag = true;
 }
 
 // ISR when calibration mode toggle button is pressed
 void calibration_isr() {
-  calibration_flag = true;
+  calibration.interrupt_flag = true;
 }
 
 // Find maximum and minimum sensor readings
 void calibrate() {
-  if (current_read > read_max) {
-    read_max = current_read;
+  if (actuation.current_read > calibration.read_max) {
+    calibration.read_max = actuation.current_read;
   }
-  if (current_read < read_min) {
-    read_min = current_read;
+  if (actuation.current_read < calibration.read_min) {
+    calibration.read_min = actuation.current_read;
   }
 }
 
 void true_rapid_trigger() {
-  if (current_level == 0 || current_level + RT_RELEASE * 10 < local_max_level) {
-    local_max_level = current_level;
-    actuated = 0;
+  if (actuation.current_level == 0 || actuation.current_level + RT_RELEASE * 10 < actuation.local_max_level) {
+    actuation.local_max_level = actuation.current_level;
+    actuation.actuated = 0;
   }
-  if (current_level > local_max_level) {
-    local_max_level = current_level;
-    actuated = 1;
+  if (actuation.current_level > actuation.local_max_level) {
+    actuation.local_max_level = actuation.current_level;
+    actuation.actuated = 1;
   }
 }
 
 void false_rapid_trigger() {
-  actuated = current_level >= actuation_level;
+  actuation.actuated = actuation.current_level >= actuation.level;
 }
